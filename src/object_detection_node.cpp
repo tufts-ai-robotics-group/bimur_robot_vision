@@ -39,6 +39,8 @@
 #include <pcl/segmentation/extract_clusters.h>
 
 #include <pcl/kdtree/kdtree.h>
+#include "bimur_robot_vision/TabletopPerception.h"
+
 
 //#include "bwi_perception/ButtonDetection.h"
 
@@ -233,7 +235,7 @@ void waitForCloudK(int k){
 	
 }
 
-//bool seg_cb(bwi_perception::ButtonDetection::Request &req, //bwi_perception::ButtonDetection::Response &res)
+//zzbool seg_cb(bwi_perception::ButtonDetection::Request &req, //bwi_perception::ButtonDetection::Response &res)
 bool seg_cb(std_srvs::Empty::Request &req, std_srvs::Empty::Response &res)
 {
 	//get the point cloud by aggregating k successive input clouds

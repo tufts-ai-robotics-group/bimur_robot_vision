@@ -63,11 +63,10 @@ find_package(catkin REQUIRED COMPONENTS
 # )
 
 ## Generate services in the 'srv' folder
-# add_service_files(
-#   FILES
-#   Service1.srv
-#   Service2.srv
-# )
+add_service_files(
+   FILES
+   TabletopPerception.srv
+ )
 
 ## Generate actions in the 'action' folder
 # add_action_files(
@@ -77,10 +76,14 @@ find_package(catkin REQUIRED COMPONENTS
 # )
 
 ## Generate added messages and services with any dependencies listed here
-# generate_messages(
-#   DEPENDENCIES
-#   std_msgs
-# )
+ generate_messages(
+   DEPENDENCIES
+   std_msgs
+   std_srvs
+   sensor_msgs
+   geometry_msgs
+   actio
+ )
 
 ################################################
 ## Declare ROS dynamic reconfigure parameters ##
@@ -152,7 +155,7 @@ include_directories(
 
 
 add_executable(object_detection_node src/object_detection_node.cpp)
-add_dependencies(object_detection_node  ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
+add_dependencies(object_detection_node  ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS} bimus_robot_vision_gencpp)
 target_link_libraries(object_detection_node ${catkin_LIBRARIES} ${PCL_LIBRARIES})
 
 
