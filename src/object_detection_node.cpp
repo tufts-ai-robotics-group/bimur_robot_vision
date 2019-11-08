@@ -235,8 +235,8 @@ void waitForCloudK(int k){
 	
 }
 
-//zzbool seg_cb(bwi_perception::ButtonDetection::Request &req, //bwi_perception::ButtonDetection::Response &res)
-bool seg_cb(std_srvs::Empty::Request &req, std_srvs::Empty::Response &res)
+//bool seg_cb(bwi_perception::ButtonDetection::Request &req, //bwi_perception::ButtonDetection::Response &res)
+bool seg_cb(bimur_robot_vision::TabletopPerception::Request &req, bimur_robot_vision::TabletopPerception::Response &res)
 {
 	//get the point cloud by aggregating k successive input clouds
 	waitForCloudK(15);
@@ -266,7 +266,7 @@ bool seg_cb(std_srvs::Empty::Request &req, std_srvs::Empty::Response &res)
     
     //**Step 2: plane fitting**//
     
-    //find palne
+    //find plane
     //one cloud contains plane other cloud contains other objects
     pcl::ModelCoefficients::Ptr coefficients (new pcl::ModelCoefficients ());
 	pcl::PointIndices::Ptr inliers (new pcl::PointIndices ());
@@ -293,6 +293,10 @@ bool seg_cb(std_srvs::Empty::Request &req, std_srvs::Empty::Response &res)
 	extract.setNegative (false);
 	extract.filter (*cloud_plane);
 
+	if(cloud_plane->empty()){
+		res.is_plane_found = false;
+		return true;
+	}
 	     
     //for everything else, cluster extraction; segment extraction
     //extract everything else
@@ -333,75 +337,37 @@ bool seg_cb(std_srvs::Empty::Request &req, std_srvs::Empty::Response &res)
 		}
 	}
 	ROS_INFO("clustes_on_plane found: %i", (int)clusters_on_plane.size());
+
+	res.is_plane_found = true;
 	
-	// if the clousters size == 0 return false
-	if(clusters_on_plane.size() == 0) {
-		
-		cloud_mutex.unlock ();
-
-		//res.button_found = false; 
-		return true;
+	//fill in responses
+	//plane cloud and coefficient
+	pcl::toROSMsg(*cloud_plane,res.cloud_plane);
+	res.cloud_plane.header.frame_id = cloud->header.frame_id;
+	for (int i = 0; i < 4; i ++){
+		res.cloud_plane_coef[i] = plane_coefficients(i);
 	}
-	//**Step 4: detect the button among the remaining clusters**//
-	int max_index = -1;
 
-	double max_red = 0.0;
-	// Find the max red value
+	//blobs on the plane
 	for (unsigned int i = 0; i < clusters_on_plane.size(); i++){
-		double red_i = computeAvgRedValue(clusters_on_plane.at(i));
-		//ROS_INFO("Cluster %i: %i points, red_value = %f",i,(int)clusters_on_plane.at(i)->points.size(),red_i);
-
-		if (red_i > max_red){
-			max_red = red_i;
-			max_index = i;
-		}
-	}
-	
-	//publish  cloud if we think it's a button
-	/*max_red > 170 && max_red < 250 && */
-	ROS_INFO("max_red=%f", max_red);
-
-	
-	if (max_index >= 0 && max_red > red_min) {
-			
-	    ROS_INFO("Button_found");
-
-		//pcl::toROSMsg(*clusters_on_plane.at(max_index),cloud_ros);
-		//cloud_ros.header.frame_id = cloud->header.frame_id;
-		//cloud_pub.publish(cloud_ros);
-
-		//fill in response
-	   // res.button_found = true;
-	   // res.cloud_button = cloud_ros;
-
-		/*Eigen::Vector4f centroid;
-		pcl::compute3DCentroid(*clusters_on_plane.at(max_index), centroid);
-		//transforms the pose into /map frame
-		geometry_msgs::Pose pose_i;
-		pose_i.position.x=centroid(0);
-		pose_i.position.y=centroid(1);
-		pose_i.position.z=centroid(2);
-		pose_i.orientation = tf::createQuaternionMsgFromRollPitchYaw(0,0,-3.14/2);
-		geometry_msgs::PoseStamped stampedPose;
-		stampedPose.header.frame_id = cloud->header.frame_id;
-		stampedPose.header.stamp = ros::Time(0);
-		stampedPose.pose = pose_i;*/
-
-		//geometry_msgs::PoseStamped stampOut;
-		//listener.waitForTransform(cloud->header.frame_id, "m1n6s200_link_base", ros::Time(0), ros::Duration(3.0));
-		//listener.transformPose("m1n6s200_link_base", stampedPose, stampOut);
-
-		//stampOut.pose.orientation = tf::createQuaternionMsgFromRollPitchYaw(0,-3.14/2,0);
-		//pose_pub.publish(stampOut);
-
-	}
-	
-	else {
-		// res.button_found = false;
-		
+		pcl::toROSMsg(*clusters_on_plane.at(i),cloud_ros);
+		cloud_ros.header.frame_id = cloud->header.frame_id;
+		res.cloud_clusters.push_back(cloud_ros);
 	}
 	
 	cloud_mutex.unlock ();
+
+	//for debugging purposes
+	cloud_blobs->clear();
+
+	for (unsigned int i = 0; i < clusters_on_plane.size(); i++){
+		*cloud_blobs += *clusters_on_plane.at(i);
+	}
+	
+	ROS_INFO("Publishing debug cloud...");
+	pcl::toROSMsg(*cloud_blobs,cloud_ros);
+	cloud_ros.header.frame_id = cloud->header.frame_id;
+	cloud_pub.publish(cloud_ros);
 
 	return true;
 }
