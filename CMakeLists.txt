@@ -154,9 +154,12 @@ include_directories(
 
 
 add_executable(object_detection_node src/object_detection_node.cpp)
-add_dependencies(object_detection_node  ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS} bimus_robot_vision_gencpp)
+add_dependencies(object_detection_node  ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS} bimur_robot_vision_gencpp)
 target_link_libraries(object_detection_node ${catkin_LIBRARIES} ${PCL_LIBRARIES})
 
+add_executable(object_detection_testclient src/object_detection_testclient.cpp) 
+add_dependencies(object_detection_testclient ${${PROJECT_NAME}_EXPORTED_TARGETS} $catkin_EXPORTED_TARGETS} bimur_robot_vision_gencpp)
+target_link_libraries(object_detection_testclient ${catkin_LIBRARIES} ${PCL_LIbraries})
 
 ## Add cmake target dependencies of the executable
 ## same as for the library above
