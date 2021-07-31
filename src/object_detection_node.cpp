@@ -48,6 +48,13 @@
 typedef pcl::PointXYZRGB PointT;
 typedef pcl::PointCloud<PointT> PointCloudT;
 
+
+//an object whose closest point to the plane is further than this is rejected
+double plane_distance_tolerance = 0.09;
+
+//an object whose furthers point to the plane is smaller than this is rejected
+double plane_max_distance_tolerance = 0.02;
+
 //threshold 
 static int red_min;
 
@@ -72,7 +79,7 @@ ros::Publisher cloud_pub;
 //true if Ctrl-C is pressed
 bool g_caught_sigint=false;
 
-double plane_distance_tolerance = 0.04;
+
 
 // Check if a file exist or not
 bool file_exist(std::string& name) {
@@ -135,8 +142,8 @@ bool filter(PointCloudT::Ptr blob, Eigen::Vector4f plane_coefficients, double to
 	
 	if (min_distance > tolerance)
 		return false;
-	else if (max_distance < 0.8*tolerance)
-		return false;	
+	/*else if (max_distance < 0.8*tolerance)
+		return false;	*/
 	
 	
 	ROS_INFO("\nMin Distance to plane for cluster with %i points: %f",(int)blob->points.size(),min_distance);
@@ -235,6 +242,9 @@ void waitForCloudK(int k){
 	
 }
 
+
+
+
 //bool seg_cb(bwi_perception::ButtonDetection::Request &req, //bwi_perception::ButtonDetection::Response &res)
 bool seg_cb(bimur_robot_vision::TabletopPerception::Request &req, bimur_robot_vision::TabletopPerception::Response &res)
 {
@@ -248,7 +258,7 @@ bool seg_cb(bimur_robot_vision::TabletopPerception::Request &req, bimur_robot_vi
 	pcl::PassThrough<PointT> pass;
 	pass.setInputCloud (cloud);
 	pass.setFilterFieldName ("z");
-	pass.setFilterLimits (0.0, 1.5);
+	pass.setFilterLimits (0.0, 1.0);
 	pass.filter (*cloud);
 	
 	// Create the filtering object: downsample the dataset using a leaf size of 1cm
@@ -326,15 +336,24 @@ bool seg_cb(bimur_robot_vision::TabletopPerception::Request &req, bimur_robot_vi
 	
 	//if clusters are touching the table put them in a vector
 	for (unsigned int i = 0; i < clusters.size(); i++){
-		Eigen::Vector4f centroid_i;
+
+
+		bool accept = filter(clusters.at(i),plane_coefficients,plane_distance_tolerance);
+		if (accept)
+		{
+			clusters_on_plane.push_back(clusters.at(i));
+		}
+
+		/*Eigen::Vector4f centroid_i;
 		pcl::compute3DCentroid(*clusters.at(i), centroid_i);
 		pcl::PointXYZ center;
 		center.x=centroid_i(0);center.y=centroid_i(1);center.z=centroid_i(2);
 
 		double distance = pcl::pointToPlaneDistance(center, plane_coefficients);
-		if (distance < 0.1 /*&& clusters.at(i).get()->points.size() >*/ ){
+		if (distance < 0.3 ){
 			clusters_on_plane.push_back(clusters.at(i));
-		}
+		}*/
+
 	}
 	ROS_INFO("clustes_on_plane found: %i", (int)clusters_on_plane.size());
 
