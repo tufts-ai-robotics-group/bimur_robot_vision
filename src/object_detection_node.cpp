@@ -1,3 +1,9 @@
+/*
+	Written by: Catherine Ding
+	Edited by: Wo Wei Lin 
+	Last Update: 5/25/2022
+*/
+
 #include <signal.h>
 #include <vector>
 #include <string>
@@ -17,6 +23,8 @@
 #include <pcl_ros/impl/transforms.hpp>
 
 // PCL specific includes
+#include <pcl/io/io.h>
+#include <pcl/io/pcd_io.h>
 #include <pcl/conversions.h>
 #include <pcl_conversions/pcl_conversions.h>
 #include <pcl/point_cloud.h>
@@ -31,6 +39,7 @@
 #include <pcl/filters/passthrough.h>
 #include <pcl/filters/voxel_grid.h>
 #include <pcl/filters/extract_indices.h>
+#include <pcl/visualization/pcl_visualizer.h>
 
 #include <pcl/ModelCoefficients.h>
 #include <pcl/sample_consensus/method_types.h>
@@ -41,8 +50,6 @@
 #include <pcl/kdtree/kdtree.h>
 #include "bimur_robot_vision/TabletopPerception.h"
 
-
-//#include "bwi_perception/ButtonDetection.h"
 
 /* define what kind of point clouds we're using */
 typedef pcl::PointXYZRGB PointT;
@@ -80,14 +87,23 @@ ros::Publisher cloud_pub;
 bool g_caught_sigint=false;
 
 
-
-// Check if a file exist or not
+/*
+	Function: file_exist()
+	Inputs  : string&
+	Outputs : boolean
+	Purpose : Checks whether a file exist or not
+*/
 bool file_exist(std::string& name) {
     struct stat buffer;
     return (stat (name.c_str(), &buffer) == 0);
 }
 
-/* what happens when ctr-c is pressed */
+/*
+	Function: sig_handler()
+	Inputs  : int
+	Outputs : None
+	Purpose : Able to use ctrl-c to exit the program on terminal
+*/
 void sig_handler(int sig)
 {
   g_caught_sigint = true;
@@ -96,11 +112,14 @@ void sig_handler(int sig)
   exit(1);
 };
 
-
-void
-cloud_cb (const sensor_msgs::PointCloud2ConstPtr& input)
+/*
+	Function: cloud_cb()
+	Inputs  : const sensor_msgs::PointCloud2ConstPtr& 
+	Outputs : None
+	Purpose : TODO
+*/
+void cloud_cb (const sensor_msgs::PointCloud2ConstPtr& input)
 {
-
 
 	cloud_mutex.lock ();
 
@@ -113,7 +132,12 @@ cloud_cb (const sensor_msgs::PointCloud2ConstPtr& input)
 	cloud_mutex.unlock ();
 }
 
-
+/*
+	Function: filter()
+	Inputs  : PointCloudT::Ptr,  Eigen::Vector4f , double
+	Outputs : boolean
+	Purpose : Filters out the cloud points for the plane and objects near it
+*/
 bool filter(PointCloudT::Ptr blob, Eigen::Vector4f plane_coefficients, double tolerance){
 	
 	double min_distance = 1000.0;
@@ -154,6 +178,12 @@ bool filter(PointCloudT::Ptr blob, Eigen::Vector4f plane_coefficients, double to
 	
 }
 
+/*
+	Function: computeAvgRedValue()
+	Inputs  : PointCloudT::Ptr
+	Outputs : double
+	Purpose : 
+*/
 double computeAvgRedValue(PointCloudT::Ptr in){
 	double total_red = 0;
 
@@ -166,6 +196,12 @@ double computeAvgRedValue(PointCloudT::Ptr in){
 	return total_red;
 }
 
+/*
+	Function: computeClusters()
+	Inputs  : PointCloudT::Ptr , double
+	Outputs : std::vector<PointCloudT::Ptr >
+	Purpose : 
+*/
 std::vector<PointCloudT::Ptr > computeClusters(PointCloudT::Ptr in, double tolerance){
 	std::vector<PointCloudT::Ptr > clusters;
 	
@@ -196,6 +232,12 @@ std::vector<PointCloudT::Ptr > computeClusters(PointCloudT::Ptr in, double toler
 	return clusters;
 }
 
+/*
+	Function: waitForCloud()
+	Inputs  : None
+	Outputs : None
+	Purpose : allows time to collect the cloud points
+*/
 void waitForCloud(){
 	ros::Rate r(30);
 	
@@ -212,7 +254,12 @@ void waitForCloud(){
 	
 }
 
-/* collects a cloud by aggregating k successive frames */
+/*
+	Function: waitForCloud()
+	Inputs  : int
+	Outputs : None
+	Purpose : collects a cloud by aggregating k successive frames
+*/
 void waitForCloudK(int k){
 	ros::Rate r(30);
 	
@@ -242,10 +289,12 @@ void waitForCloudK(int k){
 	
 }
 
-
-
-
-//bool seg_cb(bwi_perception::ButtonDetection::Request &req, //bwi_perception::ButtonDetection::Response &res)
+/*
+	Function: seg_cb()
+	Inputs  : bimur_robot_vision::TabletopPerception::Request &req, bimur_robot_vision::TabletopPerception::Response &res
+	Outputs : bool
+	Purpose : segments the cloud points and publishes the cloud points after filtering noise to rviz
+*/
 bool seg_cb(bimur_robot_vision::TabletopPerception::Request &req, bimur_robot_vision::TabletopPerception::Response &res)
 {
 	//get the point cloud by aggregating k successive input clouds
@@ -321,9 +370,9 @@ bool seg_cb(bimur_robot_vision::TabletopPerception::Request &req, bimur_robot_vi
 	
     //get the plane coefficients
 	Eigen::Vector4f plane_coefficients;
-	plane_coefficients(0)=coefficients->values[0];
-	plane_coefficients(1)=coefficients->values[1];
-	plane_coefficients(2)=coefficients->values[2];
+	plane_coefficients(0)=coefficients->values[0] + 0.1;
+	plane_coefficients(1)=coefficients->values[1] + 0.5;
+	plane_coefficients(2)=coefficients->values[2] + 0.1;
 	plane_coefficients(3)=coefficients->values[3];
 
     	
@@ -333,6 +382,14 @@ bool seg_cb(bimur_robot_vision::TabletopPerception::Request &req, bimur_robot_vi
 	ROS_INFO("clustes found: %i", (int)clusters.size());
 	
 	clusters_on_plane.clear();
+
+	//creates a box contraint and filters out noise outside of specified box based on the found plane for max values
+	pcl::CropBox<pcl::PointXYZRGB> boxFilter;
+	boxFilter.setMin(Eigen::Vector4f(0, 0, 0, 1.0));
+	boxFilter.setMax(plane_coefficients);
+	boxFilter.setInputCloud(cloud_filtered);
+	boxFilter.filter(*cloud_plane);
+
 	
 	//if clusters are touching the table put them in a vector
 	for (unsigned int i = 0; i < clusters.size(); i++){
@@ -344,17 +401,9 @@ bool seg_cb(bimur_robot_vision::TabletopPerception::Request &req, bimur_robot_vi
 			clusters_on_plane.push_back(clusters.at(i));
 		}
 
-		/*Eigen::Vector4f centroid_i;
-		pcl::compute3DCentroid(*clusters.at(i), centroid_i);
-		pcl::PointXYZ center;
-		center.x=centroid_i(0);center.y=centroid_i(1);center.z=centroid_i(2);
-
-		double distance = pcl::pointToPlaneDistance(center, plane_coefficients);
-		if (distance < 0.3 ){
-			clusters_on_plane.push_back(clusters.at(i));
-		}*/
-
 	}
+
+
 	ROS_INFO("clustes_on_plane found: %i", (int)clusters_on_plane.size());
 
 	res.is_plane_found = true;
@@ -391,6 +440,12 @@ bool seg_cb(bimur_robot_vision::TabletopPerception::Request &req, bimur_robot_vi
 	return true;
 }
 
+
+/*
+
+	Just Main
+
+*/
 int main (int argc, char** argv)
 {
 	// Initialize ROS
@@ -398,7 +453,7 @@ int main (int argc, char** argv)
 	ros::NodeHandle nh;
 
 	// Create a ROS subscriber for the input point cloud
-	std::string param_topic = "/camera/depth_registered/points"; 
+	std::string param_topic = "/camera/depth/color/points"; 
 	ros::Subscriber sub = nh.subscribe (param_topic, 1, cloud_cb);
 
 	//debugging publisher
